@@ -272,6 +272,14 @@ analysis_data_hiv_long <- analysis_data_hiv_long[!is.na(analysis_data_hiv_long$h
 # drop if test is missing
 analysis_data_hiv_long <- analysis_data_hiv_long[!is.na(analysis_data_hiv_long$hiv_end_risk), ]
 
+# calculate difference between end and start dates
+analysis_data_hiv_long <- analysis_data_hiv_long %>%
+  mutate(days_risk = hiv_end_risk-hiv_start_risk)
+
+# delete Homeless and TPrisJail6Mo columns
+analysis_data_hiv_long <- analysis_data_hiv_long %>%
+  select(-Homeless, -TPrisJail6Mo, -MetBupPrg6M, -DGINJFQB)
+
 # rename columns for consistency 
 analysis_data_hiv_long <- analysis_data_hiv_long %>%
   rename(SexWMen6Mo = hiv_msm_6m) %>%
@@ -280,10 +288,7 @@ analysis_data_hiv_long <- analysis_data_hiv_long %>%
   rename(Homeless = hiv_home_6m) %>%
   rename(MetBupPrg6M = hiv_oat_6m) %>%    
   rename(DGINJFQB = hiv_inj_6m) %>%
-  rename(HivConfStatus = hiv_tst_rslt) %>%
-  rename(DateHiv_start = hiv_start_risk) %>%
-  rename(DateHiv_end = hiv_end_risk) %>%
-  rename(midpoint_case = midpoint_case)
+  rename(hiv_rslt = hiv_tst_rslt)
   
 # save data
 write_xlsx(analysis_data_hiv_long,"HIV_data_clean.xlsx")

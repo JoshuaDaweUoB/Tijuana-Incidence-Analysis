@@ -14,7 +14,10 @@ analysis_data_hiv_bl <- analysis_data_hiv_clean %>%
   group_by(id) %>%
   mutate(id_seq = row_number(),
          SexWork6Mo = max(SexWork6Mo, na.rm = TRUE),
-         SexWMen6Mo = max(SexWMen6Mo, na.rm = TRUE)) %>%
+         SexWMen6Mo = max(SexWMen6Mo, na.rm = TRUE),
+         TPrisJail6Mo = max(TPrisJail6Mo, na.rm = TRUE),
+         MetBupPrg6M = max(MetBupPrg6M, na.rm = TRUE),
+         Homeless = max(Homeless, na.rm = TRUE)) %>%
   ungroup() %>%
   subset(id_seq == 1)
 
