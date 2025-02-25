@@ -1,217 +1,316 @@
 # load packages
-pacman::p_load(dplyr, arsenal, survival)
+pacman::p_load(dplyr, arsenal, survival, stats, readxl)
 
-######## Baseline characteristics ########
+# load data
+analysis_data_hiv_clean <- read_excel("HIV_data_clean.xlsx")
+View(analysis_data_hiv_clean)
+
+# baseline characteristics sex work
+analysis_data_hiv_clean <- analysis_data_hiv_clean %>%
+  group_by(id) %>%
+  mutate(id_seq = row_number())
+
+analysis_data_hiv_bl <- analysis_data_hiv_clean %>%
+  group_by(id) %>%
+  mutate(id_seq = row_number(),
+         SexWork6Mo = max(SexWork6Mo, na.rm = TRUE),
+         SexWMen6Mo = max(SexWMen6Mo, na.rm = TRUE)) %>%
+  ungroup() %>%
+  subset(id_seq == 1)
 
 # convert numeric to factor variables
-analysis_data_hiv$SEXBRTH <- factor(analysis_data_hiv$SEXBRTH)
-analysis_data_hiv$Homeless <- factor(analysis_data_hiv$Homeless)
-analysis_data_hiv$TPrisJail6Mo <- factor(analysis_data_hiv$TPrisJail6Mo)
-analysis_data_hiv$MetBupPrg6M <- factor(analysis_data_hiv$MetBupPrg6M)
-analysis_data_hiv$SexWork <- factor(analysis_data_hiv$SexWork)
-analysis_data_hiv$SexWMen <- factor(analysis_data_hiv$SexWMen)
-analysis_data_hiv$SexWMen6Mo_1 <- factor(analysis_data_hiv$SexWMen6Mo_1)
+analysis_data_hiv_bl$SEXBRTH <- factor(analysis_data_hiv_bl$SEXBRTH)
+analysis_data_hiv_bl$Homeless <- factor(analysis_data_hiv_bl$Homeless)
+analysis_data_hiv_bl$TPrisJail6Mo <- factor(analysis_data_hiv_bl$TPrisJail6Mo)
+analysis_data_hiv_bl$MetBupPrg6M <- factor(analysis_data_hiv_bl$MetBupPrg6M)
+analysis_data_hiv_bl$SexWork <- factor(analysis_data_hiv_bl$SexWork)
+analysis_data_hiv_bl$SexWMen <- factor(analysis_data_hiv_bl$SexWMen)
+analysis_data_hiv_bl$SexWork6Mo <- factor(analysis_data_hiv_bl$SexWork6Mo)
+analysis_data_hiv_bl$SexWMen6Mo <- factor(analysis_data_hiv_bl$SexWMen6Mo)
+analysis_data_hiv_bl$DGINJFQB <- factor(analysis_data_hiv_bl$DGINJFQB)
+analysis_data_hiv_bl$days_risk <- as.numeric(analysis_data_hiv_bl$days_risk)
 
-# male and female
-tab_bl_sw_all_hiv <- tableby(~ SEXBRTH + SexWork + SexWork6Mo_1 + AGE1INJ + Homeless + TPrisJail6Mo + MetBupPrg6M + DGINJFQB, data=analysis_data_hiv)
-summary(tab_bl_sw_all_hiv, text=TRUE)
-
-# stratified
-tab_bl_sw_sex_hiv <- tableby(SEXBRTH ~ SexWork + SexWork6Mo_1 + SexWMen + SexWMen6Mo_1 + AGE1INJ + Homeless + TPrisJail6Mo + MetBupPrg6M + DGINJFQB, data=analysis_data_hiv)
+ # table
+tab_bl_sw_sex_hiv <- tableby(SEXBRTH ~ AGE + SexWork6Mo + SexWMen6Mo + SexWork + SexWMen + AGE1INJ + Homeless + TPrisJail6Mo + MetBupPrg6M + DGINJFQB, data=analysis_data_hiv_bl)
 summary(tab_bl_sw_sex_hiv, text=TRUE)
 
-######## Recent HIV estimates #########
+### overall incidence rate calculations ###
 
-# unadjusted hazard ratio sw HIV recent - men and women
-sw_model_hiv_crude_rec = coxph(
-  Surv(time = hiv_start_risk, time2 = hiv_end_risk, event = hiv_tst_rslt) ~ hiv_sw_6m, 
-  data = analysis_data_hiv_long
-)
+total_days_hiv <- sum(analysis_data_hiv_clean$days_risk)
+total_cases <- sum(analysis_data_hiv_clean$hiv_rslt)
+incidence_rate <- (total_cases / total_days_hiv) * 365.25 * 100
 
-summary(sw_model_hiv_crude_rec)
+# Calculate 95% confidence intervals
+incidence_rate_se <- sqrt(total_cases) / total_days_hiv * 365.25 * 100
+ci_lower <- incidence_rate - 1.96 * incidence_rate_se
+ci_upper <- incidence_rate + 1.96 * incidence_rate_se
 
-# adjusted hazard ratio sw HIV recent - men and women
-sw_model_hiv_adj1_rec = coxph(
-  Surv(time = hiv_start_risk, time2 = hiv_end_risk, event = hiv_tst_rslt) ~ hiv_sw_6m + hiv_home_6m + hiv_pris_6m, 
-  data = analysis_data_hiv_long
-)
+cat("Incidence rate of HIV per 100 person years:", incidence_rate, "\n")
+cat("95% CI:", ci_lower, "-", ci_upper, "\n")
 
-summary(sw_model_hiv_adj1_rec)
+### sex work HIV incidence rate calculations ###
 
-sw_model_hiv_adj2_rec = coxph(
-  Surv(time = hiv_start_risk, time2 = hiv_end_risk, event = hiv_tst_rslt) ~ hiv_sw_6m + hiv_home_6m + hiv_pris_6m + DGINJFQB + AGE1INJ, 
-  data = analysis_data_hiv_long
-)
+# Function to calculate incidence rates and rate ratios
+calculate_incidence_and_rate_ratio <- function(data, time_bin, group_label) {
+  # selling sex work incidence rate
+  total_days_hiv_sw <- sum(data$days_risk[data[[time_bin]] == 1])
+  total_cases_sw <- sum(data$hiv_rslt[data[[time_bin]] == 1])
+  incidence_rate_sw <- (total_cases_sw / total_days_hiv_sw) * 365.25 * 100
 
-summary(sw_model_hiv_adj2_rec)
+  # Calculate 95% confidence intervals for sex workers
+  incidence_rate_sw_se <- sqrt(total_cases_sw) / total_days_hiv_sw * 365.25 * 100
+  ci_lower_sw <- incidence_rate_sw - 1.96 * incidence_rate_sw_se
+  ci_upper_sw <- incidence_rate_sw + 1.96 * incidence_rate_sw_se
 
-# unadjusted hazard ratio sw HIV recent - men
-analysis_data_hiv_men <- subset(analysis_data_hiv_long, SEXBRTH == 1)
+  cat("Incidence rate of HIV per 100 person years among sex workers (", group_label, "):", incidence_rate_sw, "\n")
+  cat("95% CI:", ci_lower_sw, "-", ci_upper_sw, "\n")
 
-sw_model_hiv_crude_men_rec = coxph(
-  Surv(time = hiv_start_risk, time2 = hiv_end_risk, event = hiv_tst_rslt) ~ hiv_sw_6m, 
-  data = analysis_data_hiv_men
-)
+  # no sex work incidence rate
+  total_days_hiv_nosw <- sum(data$days_risk[data[[time_bin]] == 0])
+  total_cases_nosw <- sum(data$hiv_rslt[data[[time_bin]] == 0])
+  incidence_rate_nosw <- (total_cases_nosw / total_days_hiv_nosw) * 365.25 * 100
 
-summary(sw_model_hiv_crude_men_rec)
+  # Calculate 95% confidence intervals for non-sex workers
+  incidence_rate_nosw_se <- sqrt(total_cases_nosw) / total_days_hiv_nosw * 365.25 * 100
+  ci_lower_nosw <- incidence_rate_nosw - 1.96 * incidence_rate_nosw_se
+  ci_upper_nosw <- incidence_rate_nosw + 1.96 * incidence_rate_nosw_se
 
-# adjusted hazard ratio sw HIV recent - men 
-sw_model_hiv_adj1_men_rec = coxph(
-  Surv(time = hiv_start_risk, time2 = hiv_end_risk, event = hiv_tst_rslt) ~ hiv_sw_6m + hiv_home_6m + hiv_pris_6m, 
-  data = analysis_data_hiv_men
-)
+  cat("Incidence rate of HIV per 100 person years among non-sex workers (", group_label, "):", incidence_rate_nosw, "\n")
+  cat("95% CI:", ci_lower_nosw, "-", ci_upper_nosw, "\n")
 
-summary(sw_model_hiv_adj1_men_rec)
+  # Calculate rate ratio and its 95% confidence interval
+  rate_ratio <- incidence_rate_sw / incidence_rate_nosw
+  rate_ratio_se <- sqrt((1 / total_cases_sw) + (1 / total_cases_nosw))
+  ci_lower_rr <- exp(log(rate_ratio) - 1.96 * rate_ratio_se)
+  ci_upper_rr <- exp(log(rate_ratio) + 1.96 * rate_ratio_se)
 
-sw_model_hiv_adj2_men_rec = coxph(
-  Surv(time = hiv_start_risk, time2 = hiv_end_risk, event = hiv_tst_rslt) ~ hiv_sw_6m + hiv_home_6m + hiv_pris_6m + DGINJFQB + AGE1INJ, 
-  data = analysis_data_hiv_men
-)
+  cat("Rate ratio of HIV (sex workers vs non-sex workers) (", group_label, "):", rate_ratio, "\n")
+  cat("95% CI:", ci_lower_rr, "-", ci_upper_rr, "\n")
 
-summary(sw_model_hiv_adj2_men_rec)
+  # Create a summary dataset for Poisson regression
+  summary_data <- data %>%
+    group_by(!!sym(time_bin), Homeless, TPrisJail6Mo, DGINJFQB, AGE1INJ) %>%
+    summarise(
+      total_cases = sum(hiv_rslt),
+      total_days = sum(days_risk)
+    ) %>%
+    mutate(
+      rate = total_cases / total_days * 365.25 * 100
+    )
 
-# unadjusted hazard ratio sw HIV recent - women
-analysis_data_hiv_women <- subset(analysis_data_hiv_long, SEXBRTH == 2)
+  # Fit Poisson regression model controlling for Homeless and TPrisJail6Mo
+  poisson_model1 <- glm(total_cases ~ get(time_bin) + Homeless + TPrisJail6Mo + offset(log(total_days)), 
+                        family = poisson(link = "log"), 
+                        data = summary_data)
 
-sw_model_hiv_crude_women_rec = coxph(
-  Surv(time = hiv_start_risk, time2 = hiv_end_risk, event = hiv_tst_rslt) ~ hiv_sw_6m, 
-  data = analysis_data_hiv_women
-)
+  # Extract rate ratio and confidence intervals
+  rate_ratio1 <- exp(coef(poisson_model1)[2])
+  ci1 <- exp(confint(poisson_model1)[2, ])
 
-summary(sw_model_hiv_crude_women_rec)
+  cat("Rate ratio of HIV (sex workers vs non-sex workers) controlling for Homeless and TPrisJail6Mo (", group_label, "):", rate_ratio1, "\n")
+  cat("95% CI:", ci1[1], "-", ci1[2], "\n")
 
-# adjusted hazard ratio sw HIV recent - women 
-sw_model_hiv_adj1_women_rec = coxph(
-  Surv(time = hiv_start_risk, time2 = hiv_end_risk, event = hiv_tst_rslt) ~ hiv_sw_6m + hiv_home_6m + hiv_pris_6m, 
-  data = analysis_data_hiv_women
-)
+  # Fit Poisson regression model controlling for Homeless, TPrisJail6Mo, DGINJFQB, and AGE1INJ
+  poisson_model2 <- glm(total_cases ~ get(time_bin) + Homeless + TPrisJail6Mo + DGINJFQB + AGE1INJ + offset(log(total_days)), 
+                        family = poisson(link = "log"), 
+                        data = summary_data)
 
-summary(sw_model_hiv_adj1_women_rec)
+  # Extract rate ratio and confidence intervals
+  rate_ratio2 <- exp(coef(poisson_model2)[2])
+  ci2 <- exp(confint(poisson_model2)[2, ])
 
-sw_model_hiv_adj2_women_rec = coxph(
-  Surv(time = hiv_start_risk, time2 = hiv_end_risk, event = hiv_tst_rslt) ~ hiv_sw_6m + hiv_home_6m + hiv_pris_6m + DGINJFQB + AGE1INJ, 
-  data = analysis_data_hiv_women
-)
+  cat("Rate ratio of HIV (sex workers vs non-sex workers) controlling for Homeless, TPrisJail6Mo, DGINJFQB, and AGE1INJ (", group_label, "):", rate_ratio2, "\n")
+  cat("95% CI:", ci2[1], "-", ci2[2], "\n")
+}
 
-summary(sw_model_hiv_adj2_women_rec)
+# Calculate for recent exposure
+analysis_data_hiv_clean <- analysis_data_hiv_clean %>%
+  mutate(sw_time_bin_recent = ifelse(is.na(SexWork6Mo), 0, SexWork6Mo))
 
-# unadjusted hazard ratio MSM HIV recent
-msm_model_hiv_crude_men_rec = coxph(
-  Surv(time = hiv_start_risk, time2 = hiv_end_risk, event = hiv_tst_rslt) ~ hiv_msm_6m, 
-  data = analysis_data_hiv_men
-)
+calculate_incidence_and_rate_ratio(analysis_data_hiv_clean, "sw_time_bin_recent", "recent exposure")
 
-summary(msm_model_hiv_crude_men_rec)
+# Calculate for lifetime exposure
+analysis_data_hiv_clean <- analysis_data_hiv_clean %>%
+  mutate(sw_time_bin_lifetime = ifelse(is.na(SexWork), 0, SexWork))
 
-# adjusted hazard ratio MSM HIV recent
-msm_model_hiv_adj1_men_rec = coxph(
-  Surv(time = hiv_start_risk, time2 = hiv_end_risk, event = hiv_tst_rslt) ~ hiv_msm_6m + hiv_home_6m + hiv_pris_6m, 
-  data = analysis_data_hiv_men
-)
+calculate_incidence_and_rate_ratio(analysis_data_hiv_clean, "sw_time_bin_lifetime", "lifetime exposure")
 
-summary(msm_model_hiv_adj1_men_rec)
+# Function to calculate incidence rates and rate ratios
+calculate_incidence_and_rate_ratio <- function(data, time_bin, group_label) {
+  # selling sex work incidence rate
+  total_days_hiv_sw <- sum(data$days_risk[data[[time_bin]] == 1])
+  total_cases_sw <- sum(data$hiv_rslt[data[[time_bin]] == 1])
+  incidence_rate_sw <- (total_cases_sw / total_days_hiv_sw) * 365.25 * 100
 
-msm_model_hiv_adj2_men_rec = coxph(
-  Surv(time = hiv_start_risk, time2 = hiv_end_risk, event = hiv_tst_rslt) ~ hiv_msm_6m + hiv_home_6m + hiv_pris_6m + DGINJFQB + AGE1INJ, 
-  data = analysis_data_hiv_men
-)
+  # Calculate 95% confidence intervals for sex workers
+  incidence_rate_sw_se <- sqrt(total_cases_sw) / total_days_hiv_sw * 365.25 * 100
+  ci_lower_sw <- incidence_rate_sw - 1.96 * incidence_rate_sw_se
+  ci_upper_sw <- incidence_rate_sw + 1.96 * incidence_rate_sw_se
 
-summary(msm_model_hiv_adj2_men_rec)
+  cat("Incidence rate of HIV per 100 person years among sex workers (", group_label, "):", incidence_rate_sw, "\n")
+  cat("95% CI:", ci_lower_sw, "-", ci_upper_sw, "\n")
 
-######## Ever HIV estimates #########
+  # no sex work incidence rate
+  total_days_hiv_nosw <- sum(data$days_risk[data[[time_bin]] == 0])
+  total_cases_nosw <- sum(data$hiv_rslt[data[[time_bin]] == 0])
+  incidence_rate_nosw <- (total_cases_nosw / total_days_hiv_nosw) * 365.25 * 100
 
-# unadjusted hazard ratio sw HIV ever - men and women
-sw_model_hiv_crude_ever = coxph(
-  Surv(time = hiv_start_risk, time2 = hiv_end_risk, event = hiv_tst_rslt) ~ SexWork, 
-  data = analysis_data_hiv_long
-)
+  # Calculate 95% confidence intervals for non-sex workers
+  incidence_rate_nosw_se <- sqrt(total_cases_nosw) / total_days_hiv_nosw * 365.25 * 100
+  ci_lower_nosw <- incidence_rate_nosw - 1.96 * incidence_rate_nosw_se
+  ci_upper_nosw <- incidence_rate_nosw + 1.96 * incidence_rate_nosw_se
 
-summary(sw_model_hiv_crude_ever)
+  cat("Incidence rate of HIV per 100 person years among non-sex workers (", group_label, "):", incidence_rate_nosw, "\n")
+  cat("95% CI:", ci_lower_nosw, "-", ci_upper_nosw, "\n")
 
-# adjusted hazard ratio sw HIV ever - men and women
-sw_model_hiv_adj1_ever = coxph(
-  Surv(time = hiv_start_risk, time2 = hiv_end_risk, event = hiv_tst_rslt) ~ SexWork + hiv_home_6m + hiv_pris_6m, 
-  data = analysis_data_hiv_long
-)
+  # Calculate rate ratio and its 95% confidence interval
+  rate_ratio <- incidence_rate_sw / incidence_rate_nosw
+  rate_ratio_se <- sqrt((1 / total_cases_sw) + (1 / total_cases_nosw))
+  ci_lower_rr <- exp(log(rate_ratio) - 1.96 * rate_ratio_se)
+  ci_upper_rr <- exp(log(rate_ratio) + 1.96 * rate_ratio_se)
 
-summary(sw_model_hiv_adj1_ever)
+  cat("Rate ratio of HIV (sex workers vs non-sex workers) (", group_label, "):", rate_ratio, "\n")
+  cat("95% CI:", ci_lower_rr, "-", ci_upper_rr, "\n")
 
-sw_model_hiv_adj2_ever = coxph(
-  Surv(time = hiv_start_risk, time2 = hiv_end_risk, event = hiv_tst_rslt) ~ SexWork + hiv_home_6m + hiv_pris_6m + DGINJFQB + AGE1INJ, 
-  data = analysis_data_hiv_long
-)
+  # Create a summary dataset for Poisson regression
+  summary_data <- data %>%
+    group_by(!!sym(time_bin), Homeless, TPrisJail6Mo, DGINJFQB, AGE1INJ) %>%
+    summarise(
+      total_cases = sum(hiv_rslt),
+      total_days = sum(days_risk)
+    ) %>%
+    mutate(
+      rate = total_cases / total_days * 365.25 * 100
+    )
 
-summary(sw_model_hiv_adj2_ever)
+  # Fit Poisson regression model controlling for Homeless and TPrisJail6Mo
+  poisson_model1 <- glm(total_cases ~ get(time_bin) + Homeless + TPrisJail6Mo + offset(log(total_days)), 
+                        family = poisson(link = "log"), 
+                        data = summary_data)
 
-# unadjusted hazard ratio sw HIV ever - men
-analysis_data_hiv_men <- subset(analysis_data_hiv_long, SEXBRTH == 1)
+  # Extract rate ratio and confidence intervals
+  rate_ratio1 <- exp(coef(poisson_model1)[2])
+  ci1 <- exp(confint(poisson_model1)[2, ])
 
-sw_model_hiv_crude_men_ever = coxph(
-  Surv(time = hiv_start_risk, time2 = hiv_end_risk, event = hiv_tst_rslt) ~ SexWork, 
-  data = analysis_data_hiv_men
-)
+  cat("Rate ratio of HIV (sex workers vs non-sex workers) controlling for Homeless and TPrisJail6Mo (", group_label, "):", rate_ratio1, "\n")
+  cat("95% CI:", ci1[1], "-", ci1[2], "\n")
 
-summary(sw_model_hiv_crude_men_ever)
+  # Fit Poisson regression model controlling for Homeless, TPrisJail6Mo, DGINJFQB, and AGE1INJ
+  poisson_model2 <- glm(total_cases ~ get(time_bin) + Homeless + TPrisJail6Mo + DGINJFQB + AGE1INJ + offset(log(total_days)), 
+                        family = poisson(link = "log"), 
+                        data = summary_data)
 
-# adjusted hazard ratio sw HIV ever - men 
-sw_model_hiv_adj1_men_ever = coxph(
-  Surv(time = hiv_start_risk, time2 = hiv_end_risk, event = hiv_tst_rslt) ~ SexWork + hiv_home_6m + hiv_pris_6m, 
-  data = analysis_data_hiv_men
-)
+  # Extract rate ratio and confidence intervals
+  rate_ratio2 <- exp(coef(poisson_model2)[2])
+  ci2 <- exp(confint(poisson_model2)[2, ])
 
-summary(sw_model_hiv_adj1_men_ever)
+  cat("Rate ratio of HIV (sex workers vs non-sex workers) controlling for Homeless, TPrisJail6Mo, DGINJFQB, and AGE1INJ (", group_label, "):", rate_ratio2, "\n")
+  cat("95% CI:", ci2[1], "-", ci2[2], "\n")
+}
 
-sw_model_hcv_adj2_men_ever = coxph(
-  Surv(time = hiv_start_risk, time2 = hiv_end_risk, event = hiv_tst_rslt) ~ SexWork + hiv_home_6m + hiv_pris_6m + DGINJFQB + AGE1INJ, 
-  data = analysis_data_hiv_men
-)
+# Calculate for recent exposure
+analysis_data_hiv_clean <- analysis_data_hiv_clean %>%
+  mutate(sw_time_bin_recent = ifelse(is.na(SexWork6Mo), 0, SexWork6Mo))
 
-summary(sw_model_hiv_adj2_men_ever)
+# Calculate for lifetime exposure
+analysis_data_hiv_clean <- analysis_data_hiv_clean %>%
+  mutate(sw_time_bin_lifetime = ifelse(is.na(SexWork), 0, SexWork))
 
-# unadjusted hazard ratio sw HIV ever - women
-analysis_data_hiv_women <- subset(analysis_data_hiv_long, SEXBRTH == 2)
+# Stratify by sex and calculate incidence and rate ratios
+analysis_data_hiv_men <- subset(analysis_data_hiv_clean, SEXBRTH == 1)
+analysis_data_hiv_women <- subset(analysis_data_hiv_clean, SEXBRTH == 2)
 
-sw_model_hiv_crude_women_ever = coxph(
-  Surv(time = hiv_start_risk, time2 = hiv_end_risk, event = hiv_tst_rslt) ~ SexWork, 
-  data = analysis_data_hiv_women
-)
+# Recent exposure
+calculate_incidence_and_rate_ratio(analysis_data_hiv_men, "sw_time_bin_recent", "men - recent exposure")
+calculate_incidence_and_rate_ratio(analysis_data_hiv_women, "sw_time_bin_recent", "women - recent exposure")
 
-summary(sw_model_hiv_crude_women_ever)
+# Lifetime exposure
+calculate_incidence_and_rate_ratio(analysis_data_hiv_men, "sw_time_bin_lifetime", "men - lifetime exposure")
+calculate_incidence_and_rate_ratio(analysis_data_hiv_women, "sw_time_bin_lifetime", "women - lifetime exposure")
 
-# adjusted hazard ratio sw HIV ever - women 
-sw_model_hiv_adj1_women_ever = coxph(
-  Surv(time = hiv_start_risk, time2 = hiv_end_risk, event = hiv_tst_rslt) ~ SexWork + hiv_home_6m + hiv_pris_6m, 
-  data = analysis_data_hiv_women
-)
+### MSM HIV incidence rate calculations ###
 
-summary(sw_model_hiv_adj1_women_ever)
+# Calculate person-time for each group
+analysis_data_hiv_clean <- analysis_data_hiv_clean %>%
+  mutate(msm_time_bin_recent = ifelse(is.na(SexWMen6Mo), 0, SexWMen6Mo),
+         msm_time_bin_lifetime = ifelse(is.na(SexWMen), 0, SexWMen))
 
-sw_model_hiv_adj2_women_ever = coxph(
-  Surv(time = hiv_start_risk, time2 = hiv_end_risk, event = hiv_tst_rslt) ~ SexWork + hiv_home_6m + hiv_pris_6m + DGINJFQB + AGE1INJ, 
-  data = analysis_data_hiv_women
-)
+# Function to calculate incidence rates and rate ratios
+calculate_incidence_and_rate_ratio <- function(data, time_bin, group_label) {
+  # MSM incidence rate
+  total_days_hiv_msm <- sum(data$days_risk[data[[time_bin]] == 1])
+  total_cases_msm <- sum(data$hiv_rslt[data[[time_bin]] == 1])
+  incidence_rate_msm <- (total_cases_msm / total_days_hiv_msm) * 365.25 * 100
 
-summary(sw_model_hiv_adj2_women_ever)
+  # Calculate 95% confidence intervals for MSM
+  incidence_rate_msm_se <- sqrt(total_cases_msm) / total_days_hiv_msm * 365.25 * 100
+  ci_lower_msm <- incidence_rate_msm - 1.96 * incidence_rate_msm_se
+  ci_upper_msm <- incidence_rate_msm + 1.96 * incidence_rate_msm_se
 
-# unadjusted hazard ratio MSM HIV ever
-msm_model_hiv_crude_men_ever = coxph(
-  Surv(time = hiv_start_risk, time2 = hiv_end_risk, event = hiv_tst_rslt) ~ SexWMen, 
-  data = analysis_data_hiv_men
-)
+  cat("Incidence rate of HIV per 100 person years among MSM (", group_label, "):", incidence_rate_msm, "\n")
+  cat("95% CI:", ci_lower_msm, "-", ci_upper_msm, "\n")
 
-summary(msm_model_hiv_crude_men_ever)
+  # non-MSM incidence rate
+  total_days_hiv_nonmsm <- sum(data$days_risk[data[[time_bin]] == 0])
+  total_cases_nonmsm <- sum(data$hiv_rslt[data[[time_bin]] == 0])
+  incidence_rate_nonmsm <- (total_cases_nonmsm / total_days_hiv_nonmsm) * 365.25 * 100
 
-# adjusted hazard ratio MSM HIV ever
-msm_model_hiv_adj1_men_ever = coxph(
-  Surv(time = hiv_start_risk, time2 = hiv_end_risk, event = hiv_tst_rslt) ~ SexWMen + hiv_home_6m + hiv_pris_6m, 
-  data = analysis_data_hiv_men
-)
+  # Calculate 95% confidence intervals for non-MSM
+  incidence_rate_nonmsm_se <- sqrt(total_cases_nonmsm) / total_days_hiv_nonmsm * 365.25 * 100
+  ci_lower_nonmsm <- incidence_rate_nonmsm - 1.96 * incidence_rate_nonmsm_se
+  ci_upper_nonmsm <- incidence_rate_nonmsm + 1.96 * incidence_rate_nonmsm_se
 
-summary(msm_model_hiv_adj1_men_ever)
+  cat("Incidence rate of HIV per 100 person years among non-MSM (", group_label, "):", incidence_rate_nonmsm, "\n")
+  cat("95% CI:", ci_lower_nonmsm, "-", ci_upper_nonmsm, "\n")
 
-msm_model_hiv_adj2_men_ever = coxph(
-  Surv(time = hiv_start_risk, time2 = hiv_end_risk, event = hiv_tst_rslt) ~ SexWMen + hiv_home_6m + hiv_pris_6m + DGINJFQB + AGE1INJ, 
-  data = analysis_data_hiv_men
-)
+  # Calculate rate ratio and its 95% confidence interval
+  rate_ratio <- incidence_rate_msm / incidence_rate_nonmsm
+  rate_ratio_se <- sqrt((1 / total_cases_msm) + (1 / total_cases_nonmsm))
+  ci_lower_rr <- exp(log(rate_ratio) - 1.96 * rate_ratio_se)
+  ci_upper_rr <- exp(log(rate_ratio) + 1.96 * rate_ratio_se)
 
-summary(msm_model_hiv_adj2_men_ever)
+  cat("Rate ratio of HIV (MSM vs non-MSM) (", group_label, "):", rate_ratio, "\n")
+  cat("95% CI:", ci_lower_rr, "-", ci_upper_rr, "\n")
+
+  # Create a summary dataset for Poisson regression
+  summary_data <- data %>%
+    group_by(!!sym(time_bin), Homeless, TPrisJail6Mo, DGINJFQB, AGE1INJ) %>%
+    summarise(
+      total_cases = sum(hiv_rslt),
+      total_days = sum(days_risk)
+    ) %>%
+    mutate(
+      rate = total_cases / total_days * 365.25 * 100
+    )
+
+  # Fit Poisson regression model controlling for Homeless and TPrisJail6Mo
+  poisson_model1 <- glm(total_cases ~ get(time_bin) + Homeless + TPrisJail6Mo + offset(log(total_days)), 
+                        family = poisson(link = "log"), 
+                        data = summary_data)
+
+  # Extract rate ratio and confidence intervals
+  rate_ratio1 <- exp(coef(poisson_model1)[2])
+  ci1 <- exp(confint(poisson_model1)[2, ])
+
+  cat("Rate ratio of HIV (MSM vs non-MSM) controlling for Homeless and TPrisJail6Mo (", group_label, "):", rate_ratio1, "\n")
+  cat("95% CI:", ci1[1], "-", ci1[2], "\n")
+
+  # Fit Poisson regression model controlling for Homeless, TPrisJail6Mo, DGINJFQB, and AGE1INJ
+  poisson_model2 <- glm(total_cases ~ get(time_bin) + Homeless + TPrisJail6Mo + DGINJFQB + AGE1INJ + offset(log(total_days)), 
+                        family = poisson(link = "log"), 
+                        data = summary_data)
+
+  # Extract rate ratio and confidence intervals
+  rate_ratio2 <- exp(coef(poisson_model2)[2])
+  ci2 <- exp(confint(poisson_model2)[2, ])
+
+  cat("Rate ratio of HIV (MSM vs non-MSM) controlling for Homeless, TPrisJail6Mo, DGINJFQB, and AGE1INJ (", group_label, "):", rate_ratio2, "\n")
+  cat("95% CI:", ci2[1], "-", ci2[2], "\n")
+}
+
+# Calculate for men - recent MSM exposure
+analysis_data_hiv_men <- subset(analysis_data_hiv_clean, SEXBRTH == 1)
+calculate_incidence_and_rate_ratio(analysis_data_hiv_men, "msm_time_bin_recent", "men - recent MSM exposure")
+
+# Calculate for men - lifetime MSM exposure
+calculate_incidence_and_rate_ratio(analysis_data_hiv_men, "msm_time_bin_lifetime", "men - lifetime MSM exposure")

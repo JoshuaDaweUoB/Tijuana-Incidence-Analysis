@@ -272,6 +272,19 @@ analysis_data_hiv_long <- analysis_data_hiv_long[!is.na(analysis_data_hiv_long$h
 # drop if test is missing
 analysis_data_hiv_long <- analysis_data_hiv_long[!is.na(analysis_data_hiv_long$hiv_end_risk), ]
 
+# rename columns for consistency 
+analysis_data_hiv_long <- analysis_data_hiv_long %>%
+  rename(SexWMen6Mo = hiv_msm_6m) %>%
+  rename(SexWork6Mo = hiv_sw_6m) %>%
+  rename(TPrisJail6Mo = hiv_pris_6m) %>%  
+  rename(Homeless = hiv_home_6m) %>%
+  rename(MetBupPrg6M = hiv_oat_6m) %>%    
+  rename(DGINJFQB = hiv_inj_6m) %>%
+  rename(HivConfStatus = hiv_tst_rslt) %>%
+  rename(DateHiv_start = hiv_start_risk) %>%
+  rename(DateHiv_end = hiv_end_risk) %>%
+  rename(midpoint_case = midpoint_case)
+  
 # save data
 write_xlsx(analysis_data_hiv_long,"HIV_data_clean.xlsx")
 

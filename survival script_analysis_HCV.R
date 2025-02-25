@@ -1,7 +1,8 @@
 # load packages
-pacman::p_load(dplyr, arsenal, survival, stats)
+pacman::p_load(dplyr, arsenal, survival, stats, readxl)
 
-## HCV analysis ##
+# load data
+analysis_data_hcv_clean <- read_excel("HCV_data_clean.xlsx")
 
 # baseline characteristics sex work
 analysis_data_hcv_clean <- analysis_data_hcv_clean %>%
@@ -28,11 +29,7 @@ analysis_data_hcv_bl$SexWMen6Mo <- factor(analysis_data_hcv_bl$SexWMen6Mo)
 analysis_data_hcv_bl$DGINJFQB <- factor(analysis_data_hcv_bl$DGINJFQB)
 analysis_data_hcv_clean$days_risk <- as.numeric(analysis_data_hcv_clean$days_risk)
 
-
-# male and female
-tab_bl_sw_all_hcv <- tableby(~ SEXBRTH + AGE + SexWork + AGE1INJ + Homeless + TPrisJail6Mo + MetBupPrg6M + DGINJFQB, data=analysis_data_hcv_bl)
-summary(tab_bl_sw_all_hcv, text=TRUE)
- # stratified
+ # table
 tab_bl_sw_sex_hcv <- tableby(SEXBRTH ~ AGE + SexWork6Mo + SexWMen6Mo + SexWork + SexWMen + AGE1INJ + Homeless + TPrisJail6Mo + MetBupPrg6M + DGINJFQB, data=analysis_data_hcv_bl)
 summary(tab_bl_sw_sex_hcv, text=TRUE)
 
