@@ -1,6 +1,9 @@
 # load packages
 pacman::p_load(dplyr, arsenal, survival, stats, readxl)
 
+## set wd
+setwd("C:/Users/vl22683/OneDrive - University of Bristol/Documents/Publications/Sex work and risk of HIV and HCV/Emails to authors/Tijuana data/Data")
+
 # load data
 analysis_data_hiv_clean <- read_excel("HIV_data_clean.xlsx")
 View(analysis_data_hiv_clean)
@@ -317,3 +320,40 @@ calculate_incidence_and_rate_ratio(analysis_data_hiv_men, "msm_time_bin_recent",
 
 # Calculate for men - lifetime MSM exposure
 calculate_incidence_and_rate_ratio(analysis_data_hiv_men, "msm_time_bin_lifetime", "men - lifetime MSM exposure")
+
+# manually calculate rate ratio for recent MSM as there were no cases
+
+# Calculate incidence rate for recent MSM exposure with 0.5 cases
+total_days_hiv_msm <- sum(analysis_data_hiv_men$days_risk[analysis_data_hiv_men$msm_time_bin_recent == 1])
+total_cases_msm <- 0.5
+incidence_rate_msm <- (total_cases_msm / total_days_hiv_msm) * 365.25 * 100
+
+# Calculate 95% confidence intervals for MSM
+incidence_rate_msm_se <- sqrt(total_cases_msm) / total_days_hiv_msm * 365.25 * 100
+ci_lower_msm <- incidence_rate_msm - 1.96 * incidence_rate_msm_se
+ci_upper_msm <- incidence_rate_msm + 1.96 * incidence_rate_msm_se
+
+cat("Incidence rate of HIV per 100 person years among MSM (recent exposure):", incidence_rate_msm, "\n")
+cat("95% CI:", ci_lower_msm, "-", ci_upper_msm, "\n")
+
+# Calculate incidence rate for unexposed males
+total_days_hiv_nonmsm <- sum(analysis_data_hiv_men$days_risk[analysis_data_hiv_men$msm_time_bin_recent == 0])
+total_cases_nonmsm <- sum(analysis_data_hiv_men$hiv_rslt[analysis_data_hiv_men$msm_time_bin_recent == 0])
+incidence_rate_nonmsm <- (total_cases_nonmsm / total_days_hiv_nonmsm) * 365.25 * 100
+
+# Calculate 95% confidence intervals for non-MSM
+incidence_rate_nonmsm_se <- sqrt(total_cases_nonmsm) / total_days_hiv_nonmsm * 365.25 * 100
+ci_lower_nonmsm <- incidence_rate_nonmsm - 1.96 * incidence_rate_nonmsm_se
+ci_upper_nonmsm <- incidence_rate_nonmsm + 1.96 * incidence_rate_nonmsm_se
+
+cat("Incidence rate of HIV per 100 person years among non-MSM (recent exposure):", incidence_rate_nonmsm, "\n")
+cat("95% CI:", ci_lower_nonmsm, "-", ci_upper_nonmsm, "\n")
+
+# Calculate rate ratio and its 95% confidence interval
+rate_ratio <- incidence_rate_msm / incidence_rate_nonmsm
+rate_ratio_se <- sqrt((1 / total_cases_msm) + (1 / total_cases_nonmsm))
+ci_lower_rr <- exp(log(rate_ratio) - 1.96 * rate_ratio_se)
+ci_upper_rr <- exp(log(rate_ratio) + 1.96 * rate_ratio_se)
+
+cat("Rate ratio of HIV (MSM vs non-MSM) (recent exposure):", rate_ratio, "\n")
+cat("95% CI:", ci_lower_rr, "-", ci_upper_rr, "\n")
