@@ -1,6 +1,9 @@
 # load packages
 pacman::p_load(dplyr, arsenal, survival, stats, readxl)
 
+## set wd
+setwd("C:/Users/vl22683/OneDrive - University of Bristol/Documents/Publications/Sex work and risk of HIV and HCV/Emails to authors/Tijuana data/Data")
+
 # load data
 analysis_data_hcv_clean <- read_excel("HCV_data_clean.xlsx")
 
